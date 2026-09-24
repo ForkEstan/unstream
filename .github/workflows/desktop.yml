@@ -6,6 +6,11 @@ on:
   schedule:
     - cron: "17 4 * * 1"
   workflow_dispatch:
+    inputs:
+      tag:
+        description: "Rebuild an existing release (e.g. v0.2.0) instead of cutting a new version"
+        required: false
+        default: ""
 
 permissions:
   contents: write
@@ -38,27 +43,32 @@ jobs:
             os: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
             qjs: qjs-linux-x86_64
-            ffmpeg: ffmpeg-master-latest-linux64-lgpl.tar.xz
+            # A release branch, not master-latest: that nightly is rebuilt
+            # daily and once shipped a winarm64 ffmpeg that segfaulted on
+            # launch, failing the release.
+            ffmpeg: ffmpeg-n8.1-latest-linux64-lgpl-8.1.tar.xz
           - name: Linux-arm64
             os: ubuntu-24.04-arm
             target: aarch64-unknown-linux-gnu
             qjs: qjs-linux-aarch64
-            ffmpeg: ffmpeg-master-latest-linuxarm64-lgpl.tar.xz
+            ffmpeg: ffmpeg-n8.1-latest-linuxarm64-lgpl-8.1.tar.xz
           - name: Windows-x64
             os: windows-latest
             target: x86_64-pc-windows-msvc
             qjs: qjs-windows-x86_64.exe
-            ffmpeg: ffmpeg-master-latest-win64-lgpl.zip
+            ffmpeg: ffmpeg-n8.1-latest-win64-lgpl-8.1.zip
           - name: Windows-arm64
             os: windows-11-arm
             target: aarch64-pc-windows-msvc
             # quickjs-ng publishes no arm64 Windows binary; Windows on ARM
             # runs x64 under emulation, and this is a short-lived subprocess.
             qjs: qjs-windows-x86_64.exe
-            ffmpeg: ffmpeg-master-latest-winarm64-lgpl.zip
+            ffmpeg: ffmpeg-n8.1-latest-winarm64-lgpl-8.1.zip
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -288,12 +298,16 @@ jobs:
       # binary and the update feed can never disagree.
       - name: Resolve version
         shell: bash
+        env:
+          REBUILD_TAG: ${{ inputs.tag }}
         run: |
           node -e '
             const fs = require("fs");
             const confPath = "desktop/src-tauri/tauri.conf.json";
             const conf = JSON.parse(fs.readFileSync(confPath, "utf8"));
-            const ref = process.env.GITHUB_REF || "";
+            const ref = process.env.REBUILD_TAG
+              ? `refs/tags/${process.env.REBUILD_TAG}`
+              : process.env.GITHUB_REF || "";
             const version = ref.startsWith("refs/tags/v")
               ? ref.slice("refs/tags/v".length)
               // run_number is monotonic for the life of the workflow, so
