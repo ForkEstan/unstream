@@ -7,6 +7,7 @@ import {
   apiError,
   getArtist,
   isCanceled,
+  isConnectionError,
   isCatalogUrl,
   mergeResults,
   resolveUrl,
@@ -297,6 +298,13 @@ function Shell() {
   const [initialParams] = useState(() => new URLSearchParams(window.location.search))
   const inputRef = useRef<HTMLInputElement | null>(null)
   const [desktopTab, setDesktopTab] = useState<DesktopTab>('search')
+  // Set when a failure sends the person to Settings: the Connection card
+  // scrolls into view and runs its test without being asked.
+  const [connectionFocus, setConnectionFocus] = useState(false)
+  const openConnectionSettings = () => {
+    setConnectionFocus(true)
+    setDesktopTab('settings')
+  }
 
   const { push } = useToast()
 
@@ -612,18 +620,24 @@ function Shell() {
             {/* Native Desktop Sidebar */}
             <DesktopSidebar
               activeTab={desktopTab}
-              onSelectTab={setDesktopTab}
+              onSelectTab={(tab) => {
+                setConnectionFocus(false)
+                setDesktopTab(tab)
+              }}
               onOpenKaraoke={() => setKaraokeOpen(true)}
             />
 
             <div className="flex-1 min-h-0 overflow-hidden">
               <Suspense fallback={<div className="h-full bg-[#10130f]" />}>
                 {desktopTab === 'downloads' ? (
-                  <DesktopDownloadsView onGoToSearch={() => setDesktopTab('search')} />
+                  <DesktopDownloadsView
+                    onGoToSearch={() => setDesktopTab('search')}
+                    onOpenSettings={openConnectionSettings}
+                  />
                 ) : desktopTab === 'library' ? (
                   <DesktopLibraryView />
                 ) : desktopTab === 'settings' ? (
-                  <DesktopSettingsView />
+                  <DesktopSettingsView focusConnection={connectionFocus} />
                 ) : (
                   <div className="flex h-full flex-col overflow-y-auto bg-[radial-gradient(circle_at_50%_-20%,rgba(200,242,79,0.045),transparent_34%)] px-7 pb-8 pt-5">
                     <main className="mx-auto w-full max-w-[62rem] flex-1">
@@ -673,12 +687,21 @@ function Shell() {
                             </button>
                           </div>
                           {error && (
-                            <p
+                            <div
                               role="alert"
-                              className="mt-4 animate-fade-up rounded-btn border border-danger/25 bg-danger/10 px-4 py-3 text-sm text-danger"
+                              className="mt-4 flex animate-fade-up flex-wrap items-center justify-between gap-3 rounded-btn border border-danger/25 bg-danger/10 px-4 py-3 text-sm text-danger"
                             >
-                              {apiError(error, m)}
-                            </p>
+                              <span className="min-w-0 flex-1">{apiError(error, m)}</span>
+                              {isConnectionError(error) && (
+                                <button
+                                  type="button"
+                                  onClick={openConnectionSettings}
+                                  className="h-8 shrink-0 rounded-ctl border border-danger/30 px-3 text-mini font-semibold text-ink-100 transition hover:bg-danger/15 active:scale-95"
+                                >
+                                  {m.errors.checkConnection}
+                                </button>
+                              )}
+                            </div>
                           )}
                         </section>
                       ) : (
@@ -723,12 +746,21 @@ function Shell() {
                           </Collapsible>
 
                           {error && (
-                            <p
+                            <div
                               role="alert"
-                              className="mt-4 animate-fade-up rounded-btn border border-danger/25 bg-danger/10 px-4 py-3 text-sm text-danger"
+                              className="mt-4 flex animate-fade-up flex-wrap items-center justify-between gap-3 rounded-btn border border-danger/25 bg-danger/10 px-4 py-3 text-sm text-danger"
                             >
-                              {apiError(error, m)}
-                            </p>
+                              <span className="min-w-0 flex-1">{apiError(error, m)}</span>
+                              {isConnectionError(error) && (
+                                <button
+                                  type="button"
+                                  onClick={openConnectionSettings}
+                                  className="h-8 shrink-0 rounded-ctl border border-danger/30 px-3 text-mini font-semibold text-ink-100 transition hover:bg-danger/15 active:scale-95"
+                                >
+                                  {m.errors.checkConnection}
+                                </button>
+                              )}
+                            </div>
                           )}
                         </section>
                       )}
